@@ -1041,15 +1041,7 @@ public class frontInformes extends javax.swing.JFrame {
             try {
                 Image img = Image.getInstance(file.getAbsolutePath());
 
-                // Controlar mejor la escala de las imágenes
-                float maxWidth = 100;  // Ancho máximo permiøtido
-                float maxHeight = 50; // Alto máximo permitido
-                float width = img.getWidth();
-                float height = img.getHeight();
-
-                // Calcular la relación de escala manteniendo el aspecto de la imagen
-                float scaleFactor = Math.min(maxWidth / width, maxHeight / height);
-                img.scaleAbsolute(width * scaleFactor, height * scaleFactor);
+                img.scaleToFit(100, 50);
 
                 PdfPCell imageCell = new PdfPCell(img, true);
                 imageCell.setPadding(5);
@@ -1128,7 +1120,7 @@ public class frontInformes extends javax.swing.JFrame {
 
             innerTable.addCell(space);
 
-            PdfPCell val = new PdfPCell(new Paragraph("Válido la visita correspondiente, del proveedor o contratista FULA CONSTRUCTOR S.A.S., visita que fue bajo mi supervisión, para dar claridad de lo necesitado.", normalFont));
+            PdfPCell val = new PdfPCell(new Paragraph("Recibí a satisfacción los bienes, obras y/o servicios relacionados en la orden de servicio N° " + this.numInforme+ "de fecha " + this.fechaInicio + ", del proveedor o contratista Fula Constructor S.A.S.", normalFont));
             val.setBorder(PdfPCell.NO_BORDER);
             innerTable.addCell(val);
 
@@ -1145,6 +1137,14 @@ public class frontInformes extends javax.swing.JFrame {
             PdfPCell numr = new PdfPCell(new Paragraph("Telefono: " + numRes, normalFont));
             numr.setBorder(PdfPCell.NO_BORDER);
             innerTable.addCell(numr);
+            
+            PdfPCell cargo = new PdfPCell(new Paragraph("Cargo: " + "Pastor encargado", normalFont));
+            cargo.setBorder(PdfPCell.NO_BORDER);
+            innerTable.addCell(cargo);
+            
+            PdfPCell fechres = new PdfPCell(new Paragraph("Fecha de recibido: " + this.fechaFin, normalFont));
+            fechres.setBorder(PdfPCell.NO_BORDER);
+            innerTable.addCell(fechres);
 
             innerTable.addCell(space);
 
