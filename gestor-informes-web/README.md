@@ -7,6 +7,8 @@ informe en **PDF** con la misma plantilla que usa la aplicación de escritorio (
 Funciona completamente en el navegador: no necesita servidor, base de datos externa ni conexión a internet una vez
 cargada.
 
+**Aplicación publicada:** <https://fuladev.github.io/Gestor_de_informes/>  (GitHub Pages, rama `gh-pages`)
+
 ![Listado de informes con el menú de acciones](docs/capturas/01-listado.png)
 
 ---
@@ -216,8 +218,16 @@ Abra <http://localhost:5173> en el navegador.
 `npm run build` genera en `dist/` una aplicación **estática** (HTML, JS e imágenes). Usa rutas relativas y
 navegación con `#`, así que se puede publicar en cualquier hosting estático sin configuración adicional:
 
-- **GitHub Pages**: suba el contenido de `dist/` a la rama `gh-pages` (o use una GitHub Action de Pages) y
-  actívelo en *Settings → Pages*.
+- **GitHub Pages** (así está publicada hoy): el contenido de `dist/` vive en la rama `gh-pages` del repositorio y
+  *Settings → Pages* está configurado como *Deploy from a branch → `gh-pages` / `(root)`*. Para publicar una
+  versión nueva:
+
+  ```bash
+  npm run build
+  touch dist/.nojekyll
+  cd dist && git init -b gh-pages && git add -A && git commit -m "Deploy"
+  git push -f https://github.com/Fuladev/Gestor_de_informes.git gh-pages
+  ```
 - **Netlify / Vercel / Cloudflare Pages**: comando de build `npm run build`, carpeta de publicación `dist`.
 - **Servidor propio**: copie `dist/` a cualquier carpeta servida por Apache, Nginx, IIS, etc.
 
