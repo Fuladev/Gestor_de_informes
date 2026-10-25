@@ -126,7 +126,7 @@ export async function listReports(): Promise<ReportSummary[]> {
     supabase.from('servicios').select('id, informe_id'),
     supabase.from('evidencias').select('servicio_id'),
   ])
-  const reports = check(informes).map(toReport)
+  const reports = ((check(informes) ?? []) as InformeRow[]).map(toReport)
   const services = check(servicios) as Pick<ServicioRow, 'id' | 'informe_id'>[]
   const perService = new Map<number, number>()
   for (const e of check(evidencias) as Pick<EvidenciaRow, 'servicio_id'>[]) {
@@ -173,10 +173,13 @@ export async function listServices(reportId: number): Promise<Service[]> {
   return (rows as ServicioRow[]).map(toService)
 }
 
-export async function createService(reportId: number, nombre: string): Promise<void> {
+export async function createService(reportId: number, nombre: string): Promise<Service> {
   const existing = await listServices(reportId)
   const posicion = existing.length ? existing[existing.length - 1].posicion + 1 : 1
-  check(await supabase.from('servicios').insert({ informe_id: reportId, nombre: nombre.trim(), posicion }).select('id'))
+  const row = check(
+    await supabase.from('servicios').insert({ informe_id: reportId, nombre: nombre.trim(), posicion }).select('*').single(),
+  )
+  return toService(row as ServicioRow)
 }
 
 export async function renameService(service: Service, nombre: string): Promise<void> {

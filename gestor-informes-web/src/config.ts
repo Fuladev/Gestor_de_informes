@@ -17,3 +17,19 @@ export const DOCUMENTACION_ENTREGADA = [
   'Certificación bancaria',
   'Factura',
 ]
+
+/** Datos fijos del acta de entrega (plantilla ACTA_DE_ENTREGA.pdf). */
+export const ACTA = {
+  titulo: ['ACTA DE ENTREGA DE TRABAJO', 'MANTENIMIENTO LOCATIVOS', 'EMPRESA: FULA CONSTRUCTOR S.A.S', 'NIT. 901224360-VILLAVICENCIO – META'],
+  empresa: 'FULA CONSTRUCTOR S.A.S',
+  nit: '901224360',
+  ciudad: 'Villavicencio meta',
+  representante: 'Heyesmid Fula Montenegro',
+  cedula: '86056334',
+  cedulaFirma: '86056334 de v/cio',
+  cargoRepresentante: 'Representante legal',
+  tituloTrabajos: 'Mantenimiento:',
+  direccion: 'Dirección: Calle 41 # 18 - 15 U. DELIRIO Villavicencio (Meta)',
+  telefono: 'Tel: 3118533544',
+  correo: 'proyectosfulaconstructor@gmail.com',
+}

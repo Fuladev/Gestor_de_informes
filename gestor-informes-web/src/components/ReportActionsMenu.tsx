@@ -1,3 +1,4 @@
+import AssignmentTurnedInOutlinedIcon from '@mui/icons-material/AssignmentTurnedInOutlined'
 import DeleteOutlineIcon from '@mui/icons-material/DeleteOutlined'
 import EditOutlinedIcon from '@mui/icons-material/EditOutlined'
 import MoreVertIcon from '@mui/icons-material/MoreVert'
@@ -5,11 +6,12 @@ import PictureAsPdfOutlinedIcon from '@mui/icons-material/PictureAsPdfOutlined'
 import VisibilityOutlinedIcon from '@mui/icons-material/VisibilityOutlined'
 import { Divider, IconButton, ListItemIcon, ListItemText, Menu, MenuItem } from '@mui/material'
 import { useState } from 'react'
+import type { DocumentKind } from '../hooks/useReportPdf'
 
 interface ReportActionsMenuProps {
   onEdit?: () => void
   onPreview: () => void
-  onDownload: () => void
+  onDownload: (kind: DocumentKind) => void
   onDelete: () => void
   disabled?: boolean
 }
@@ -48,11 +50,17 @@ export function ReportActionsMenu({ onEdit, onPreview, onDownload, onDelete, dis
           </ListItemIcon>
           <ListItemText>Previsualizar</ListItemText>
         </MenuItem>
-        <MenuItem onClick={run(onDownload)}>
+        <MenuItem onClick={run(() => onDownload('informe'))}>
           <ListItemIcon>
             <PictureAsPdfOutlinedIcon fontSize="small" />
           </ListItemIcon>
-          <ListItemText>Descargar PDF</ListItemText>
+          <ListItemText>Descargar informe PDF</ListItemText>
+        </MenuItem>
+        <MenuItem onClick={run(() => onDownload('acta'))}>
+          <ListItemIcon>
+            <AssignmentTurnedInOutlinedIcon fontSize="small" />
+          </ListItemIcon>
+          <ListItemText>Descargar acta de entrega</ListItemText>
         </MenuItem>
         <Divider />
         <MenuItem onClick={run(onDelete)} sx={{ color: 'error.main' }}>

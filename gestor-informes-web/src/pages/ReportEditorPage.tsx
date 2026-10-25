@@ -1,11 +1,14 @@
 import ArrowBackIcon from '@mui/icons-material/ArrowBack'
+import AssignmentTurnedInOutlinedIcon from '@mui/icons-material/AssignmentTurnedInOutlined'
 import PictureAsPdfOutlinedIcon from '@mui/icons-material/PictureAsPdfOutlined'
 import VisibilityOutlinedIcon from '@mui/icons-material/VisibilityOutlined'
-import { Alert, Box, Button, CircularProgress, IconButton, Stack, Typography } from '@mui/material'
-import { useLiveQuery } from 'dexie-react-hooks'
+import { Alert, Box, Button, Chip, CircularProgress, IconButton, Stack, Typography } from '@mui/material'
+import { useQueryClient } from '@tanstack/react-query'
 import { useMemo, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
-import { createReport, db, deleteReport, updateReport } from '../db'
+import { createReport, deleteReport, updateReport } from '../api'
+import { useAction, useReport } from '../hooks/queries'
+import { actaNumber } from '../lib/format'
 import { ConfirmDialog } from '../components/Dialogs'
 import { ReportForm } from '../components/ReportForm'
 import { EMPTY_REPORT } from '../lib/emptyReport'
@@ -27,12 +30,15 @@ export default function ReportEditorPage() {
   const params = useParams()
   const navigate = useNavigate()
   const notify = useNotify()
+  const run = useAction()
+  const queryClient = useQueryClient()
   const id = params.id ? Number(params.id) : undefined
-  const report = useLiveQuery(() => (id ? db.reports.get(id).then((r) => r ?? null) : null), [id])
+  const { data: report, error } = useReport(id)
   const initial = useMemo(() => (report ? toData(report) : EMPTY_REPORT), [report])
   const pdf = useReportPdf()
   const [confirmDelete, setConfirmDelete] = useState(false)
 
+  if (error) return <Alert severity="error">No se pudo cargar el informe: {error.message}</Alert>
   if (id !== undefined && report === undefined) {
     return (
       <Box sx={{ display: 'grid', placeItems: 'center', py: 8 }}>
@@ -45,13 +51,19 @@ export default function ReportEditorPage() {
   }
 
   const save = async (data: ReportData) => {
-    if (id === undefined) {
-      const newId = await createReport(data)
-      notify('Informe creado. Ahora agregue los servicios y sus evidencias.')
-      navigate(`/informes/${newId}`, { replace: true })
-    } else {
-      await updateReport(id, data)
-      notify('Cambios guardados')
+    try {
+      if (id === undefined) {
+        const created = await createReport(data)
+        notify(`Informe creado con el acta N° ${actaNumber(created.actaNumero)}. Ahora agregue los servicios y sus evidencias.`)
+        navigate(`/informes/${created.id}`, { replace: true })
+      } else {
+        await updateReport(id, data)
+        notify('Cambios guardados')
+      }
+    } catch (e) {
+      notify(`No se pudo guardar: ${e instanceof Error ? e.message : e}`, 'error')
+    } finally {
+      await queryClient.invalidateQueries()
     }
   }
 
@@ -61,25 +73,37 @@ export default function ReportEditorPage() {
         <IconButton onClick={() => navigate('/')} aria-label="Volver">
           <ArrowBackIcon />
         </IconButton>
-        <Typography variant="h5" sx={{ fontWeight: 700, flex: 1, minWidth: 200 }}>
-          {id === undefined ? 'Nuevo informe' : `Informe · Orden ${report?.ordenObra}`}
-        </Typography>
+        <Stack direction="row" sx={{ alignItems: 'center', gap: 1.5, flex: 1, minWidth: 200, flexWrap: 'wrap' }}>
+          <Typography variant="h5" sx={{ fontWeight: 700 }}>
+            {id === undefined ? 'Nuevo informe' : `Informe · Orden ${report?.ordenObra}`}
+          </Typography>
+          {report && <Chip color="primary" variant="outlined" label={`Acta N° ${actaNumber(report.actaNumero)}`} />}
+        </Stack>
         {id !== undefined && (
-          <Stack direction="row" spacing={1}>
+          <Stack direction="row" useFlexGap spacing={1} sx={{ flexWrap: 'wrap' }}>
             <Button variant="outlined" startIcon={<VisibilityOutlinedIcon />} onClick={() => pdf.openPreview(id)}>
               Previsualizar
             </Button>
             <Button
               variant="contained"
               startIcon={pdf.busyId === id ? <CircularProgress size={18} color="inherit" /> : <PictureAsPdfOutlinedIcon />}
-              onClick={() => pdf.download(id)}
+              onClick={() => pdf.download(id, 'informe')}
               disabled={pdf.busyId === id}
             >
-              Descargar PDF
+              Informe PDF
+            </Button>
+            <Button
+              variant="contained"
+              color="secondary"
+              startIcon={<AssignmentTurnedInOutlinedIcon />}
+              onClick={() => pdf.download(id, 'acta')}
+              disabled={pdf.busyId === id}
+            >
+              Acta de entrega
             </Button>
             <ReportActionsMenu
               onPreview={() => pdf.openPreview(id)}
-              onDownload={() => pdf.download(id)}
+              onDownload={(kind) => pdf.download(id, kind)}
               onDelete={() => setConfirmDelete(true)}
             />
           </Stack>
@@ -90,7 +114,8 @@ export default function ReportEditorPage() {
           y no queremos descartar lo que el usuario está escribiendo. */}
       <ReportForm
         key={JSON.stringify(initial)}
-        initial={initial} submitLabel={id === undefined ? 'Crear informe' : 'Guardar cambios'} onSubmit={save} />
+        initial={initial}
+        submitLabel={id === undefined ? 'Crear informe' : 'Guardar cambios'} onSubmit={save} />
 
       {id !== undefined ? (
         <ServicesEditor reportId={id} />
@@ -104,9 +129,7 @@ export default function ReportEditorPage() {
         title="Eliminar informe"
         message="Se eliminará el informe con todos sus servicios y evidencias. Esta acción no se puede deshacer."
         onConfirm={async () => {
-          await deleteReport(id!)
-          notify('Informe eliminado')
-          navigate('/', { replace: true })
+          if (await run(() => deleteReport(id!), 'Informe eliminado')) navigate('/', { replace: true })
         }}
         onClose={() => setConfirmDelete(false)}
       />

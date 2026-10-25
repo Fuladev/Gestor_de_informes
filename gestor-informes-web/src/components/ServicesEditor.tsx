@@ -1,15 +1,14 @@
 import AddIcon from '@mui/icons-material/Add'
 import { Box, Button, Paper, Stack, Typography } from '@mui/material'
-import { useLiveQuery } from 'dexie-react-hooks'
 import { useState } from 'react'
-import { createService, db } from '../db'
-import { useNotify } from '../hooks/useNotify'
+import { createService } from '../api'
+import { useAction, useServices } from '../hooks/queries'
 import { TextPromptDialog } from './Dialogs'
 import { ServiceCard } from './ServiceCard'
 
 export function ServicesEditor({ reportId }: { reportId: number }) {
-  const notify = useNotify()
-  const services = useLiveQuery(() => db.services.where('reportId').equals(reportId).sortBy('posicion'), [reportId])
+  const run = useAction()
+  const { data: services } = useServices(reportId)
   const [adding, setAdding] = useState(false)
 
   return (
@@ -50,10 +49,7 @@ export function ServicesEditor({ reportId }: { reportId: number }) {
         label="Nombre del servicio"
         confirmLabel="Crear"
         helperText="Después de crearlo podrá subir sus evidencias"
-        onSubmit={async (nombre) => {
-          await createService(reportId, nombre)
-          notify('Servicio creado')
-        }}
+        onSubmit={(nombre) => run(() => createService(reportId, nombre), 'Servicio creado')}
         onClose={() => setAdding(false)}
       />
     </Box>

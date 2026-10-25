@@ -28,25 +28,41 @@ import {
   useTheme,
 } from '@mui/material'
 import { useCallback, useEffect, useState } from 'react'
-import { getFullReport } from '../db'
+import { getFullReport } from '../api'
 import { useObjectUrl } from '../hooks/useObjectUrl'
 import { useNotify } from '../hooks/useNotify'
-import { pdfFileName } from '../lib/format'
+import { actaFileName, actaNumber, pdfFileName } from '../lib/format'
 import { reviewReport, type Issue } from '../lib/validation'
 import type { FullReport } from '../types'
-import { EvidenceThumb } from './EvidenceThumb'
+import { BlobEvidenceThumb } from './EvidenceThumb'
 
 /** Se monta solo mientras está abierto, así cada apertura arranca con el estado inicial. */
 interface PreviewDialogProps {
   reportId: number
-  initialTab?: 'review' | 'pdf'
+  initialTab?: PreviewTab
   onClose: () => void
 }
+
+export type PreviewTab = 'pdf' | 'acta' | 'review'
 
 interface PreviewState {
   full: FullReport
   issues: Issue[]
   pdf: Blob
+  acta: Blob
+}
+
+function PdfFrame({ url, title }: { url: string | undefined; title: string }) {
+  return (
+    <>
+      <Box component="iframe" title={title} src={url} sx={{ flex: 1, border: 0, minHeight: '70vh', width: '100%' }} />
+      <Box sx={{ p: 1, textAlign: 'center', display: { md: 'none' } }}>
+        <Button size="small" startIcon={<OpenInNewIcon />} href={url ?? ''} target="_blank" rel="noopener">
+          Si no ve el PDF, ábralo en una pestaña nueva
+        </Button>
+      </Box>
+    </>
+  )
 }
 
 export function PreviewDialog({ reportId, initialTab = 'pdf', onClose }: PreviewDialogProps) {
@@ -58,15 +74,20 @@ export function PreviewDialog({ reportId, initialTab = 'pdf', onClose }: Preview
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string>()
   const pdfUrl = useObjectUrl(state?.pdf)
+  const actaUrl = useObjectUrl(state?.acta)
 
   const load = useCallback(async () => {
     try {
       const full = await getFullReport(reportId)
       if (!full) throw new Error('El informe ya no existe')
-      // El generador de PDF (jsPDF) se carga bajo demanda para aligerar la carga inicial.
-      const { reportPdfBlob } = await import('../lib/pdf')
-      const [issues, pdf] = await Promise.all([reviewReport(full), reportPdfBlob(full)])
-      setState({ full, issues, pdf })
+      // Los generadores de PDF (jsPDF) se cargan bajo demanda para aligerar la carga inicial.
+      const [{ reportPdfBlob }, { actaPdfBlob }] = await Promise.all([import('../lib/pdf'), import('../lib/acta')])
+      const [issues, pdf, acta] = await Promise.all([
+        reviewReport(full),
+        reportPdfBlob(full),
+        actaPdfBlob(full.report, full.services),
+      ])
+      setState({ full, issues, pdf, acta })
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e))
     } finally {
@@ -91,12 +112,18 @@ export function PreviewDialog({ reportId, initialTab = 'pdf', onClose }: Preview
   const flagged = new Map(state?.issues.filter((i) => i.evidenceId !== undefined).map((i) => [i.evidenceId!, i.level]))
 
   const download = () => {
-    if (!state || !pdfUrl) return
+    if (!state || !pdfUrl || !actaUrl) return
+    const { report } = state.full
     const a = document.createElement('a')
-    a.href = pdfUrl
-    a.download = pdfFileName(state.full.report.ordenObra, state.full.report.responsableNombre)
+    if (tab === 'acta') {
+      a.href = actaUrl
+      a.download = actaFileName(report.actaNumero, report.ordenObra)
+    } else {
+      a.href = pdfUrl
+      a.download = pdfFileName(report.ordenObra, report.responsableNombre)
+    }
     a.click()
-    notify('PDF descargado')
+    notify(tab === 'acta' ? 'Acta de entrega descargada' : 'Informe descargado')
   }
 
   return (
@@ -114,8 +141,15 @@ export function PreviewDialog({ reportId, initialTab = 'pdf', onClose }: Preview
           <CloseIcon />
         </IconButton>
       </DialogTitle>
-      <Tabs value={tab} onChange={(_, v) => setTab(v)} sx={{ px: 3, borderBottom: 1, borderColor: 'divider' }}>
-        <Tab value="pdf" label="PDF" />
+      <Tabs
+        value={tab}
+        onChange={(_, v) => setTab(v)}
+        variant="scrollable"
+        allowScrollButtonsMobile
+        sx={{ px: { xs: 0, sm: 3 }, borderBottom: 1, borderColor: 'divider' }}
+      >
+        <Tab value="pdf" label="Informe" />
+        <Tab value="acta" label={state ? `Acta N° ${actaNumber(state.full.report.actaNumero)}` : 'Acta de entrega'} />
         <Tab
           value="review"
           label={
@@ -148,12 +182,12 @@ export function PreviewDialog({ reportId, initialTab = 'pdf', onClose }: Preview
                 Se encontraron {errors.length} problema(s) en el informe.
               </Alert>
             )}
-            <Box component="iframe" title="Vista previa del PDF" src={pdfUrl} sx={{ flex: 1, border: 0, minHeight: '70vh', width: '100%' }} />
-            <Box sx={{ p: 1, textAlign: 'center', display: { md: 'none' } }}>
-              <Button size="small" startIcon={<OpenInNewIcon />} href={pdfUrl ?? ''} target="_blank" rel="noopener">
-                Si no ve el PDF, ábralo en una pestaña nueva
-              </Button>
-            </Box>
+            <PdfFrame url={pdfUrl} title="Vista previa del informe" />
+          </Box>
+        )}
+        {!loading && state && tab === 'acta' && (
+          <Box sx={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
+            <PdfFrame url={actaUrl} title="Vista previa del acta de entrega" />
           </Box>
         )}
         {!loading && state && tab === 'review' && (
@@ -189,7 +223,7 @@ export function PreviewDialog({ reportId, initialTab = 'pdf', onClose }: Preview
                 ) : (
                   <Box sx={{ display: 'grid', gap: 1.5, gridTemplateColumns: 'repeat(auto-fill, minmax(120px, 1fr))' }}>
                     {service.evidences.map((ev, i) => (
-                      <EvidenceThumb key={ev.id} blob={ev.blob} nombre={ev.nombre} index={i + 1} highlight={flagged.get(ev.id!)} />
+                      <BlobEvidenceThumb key={ev.id} blob={ev.blob} nombre={ev.nombre} index={i + 1} highlight={flagged.get(ev.id)} />
                     ))}
                   </Box>
                 )}
@@ -201,7 +235,7 @@ export function PreviewDialog({ reportId, initialTab = 'pdf', onClose }: Preview
       <DialogActions sx={{ px: 3, py: 2, borderTop: 1, borderColor: 'divider' }}>
         <Button onClick={onClose}>Cerrar</Button>
         <Button variant="contained" startIcon={<DownloadIcon />} onClick={download} disabled={!state || loading}>
-          {errors.length > 0 ? 'Descargar de todas formas' : 'Descargar PDF'}
+          {tab === 'acta' ? 'Descargar acta' : errors.length > 0 ? 'Descargar informe de todas formas' : 'Descargar informe'}
         </Button>
       </DialogActions>
     </Dialog>

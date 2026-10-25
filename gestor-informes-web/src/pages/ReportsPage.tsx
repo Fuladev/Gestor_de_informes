@@ -4,6 +4,7 @@ import PersonOutlineIcon from '@mui/icons-material/PersonOutlined'
 import PlaceOutlinedIcon from '@mui/icons-material/PlaceOutlined'
 import SearchIcon from '@mui/icons-material/Search'
 import {
+  Alert,
   Box,
   Button,
   Card,
@@ -16,41 +17,16 @@ import {
   TextField,
   Typography,
 } from '@mui/material'
-import { useLiveQuery } from 'dexie-react-hooks'
 import { useState, type ReactNode } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { db, deleteReport } from '../db'
+import { deleteReport } from '../api'
+import { LocalImportBanner } from '../components/LocalImportBanner'
+import { useAction, useReports } from '../hooks/queries'
 import { ConfirmDialog } from '../components/Dialogs'
 import { ReportActionsMenu } from '../components/ReportActionsMenu'
-import { useNotify } from '../hooks/useNotify'
 import { useReportPdf } from '../hooks/useReportPdf'
-import { formatDate } from '../lib/format'
+import { actaNumber, formatDate } from '../lib/format'
 import type { Report } from '../types'
-
-interface Row {
-  report: Report
-  services: number
-  evidences: number
-}
-
-async function loadRows(): Promise<Row[]> {
-  const [reports, services, evidenceServiceIds] = await Promise.all([
-    db.reports.orderBy('updatedAt').reverse().toArray(),
-    db.services.toArray(),
-    // Solo las claves del índice: evita leer las imágenes para contar.
-    db.evidences.orderBy('serviceId').keys(),
-  ])
-  const perService = new Map<number, number>()
-  for (const key of evidenceServiceIds) perService.set(key as number, (perService.get(key as number) ?? 0) + 1)
-  return reports.map((report) => {
-    const own = services.filter((s) => s.reportId === report.id)
-    return {
-      report,
-      services: own.length,
-      evidences: own.reduce((sum, s) => sum + (perService.get(s.id!) ?? 0), 0),
-    }
-  })
-}
 
 function Meta({ icon, children }: { icon: ReactNode; children: ReactNode }) {
   return (
@@ -65,15 +41,17 @@ function Meta({ icon, children }: { icon: ReactNode; children: ReactNode }) {
 
 export default function ReportsPage() {
   const navigate = useNavigate()
-  const notify = useNotify()
-  const rows = useLiveQuery(loadRows)
+  const run = useAction()
+  const { data: rows, error } = useReports()
   const pdf = useReportPdf()
   const [search, setSearch] = useState('')
   const [toDelete, setToDelete] = useState<Report | null>(null)
 
   const term = search.trim().toLowerCase()
   const filtered = rows?.filter(({ report: r }) =>
-    [r.ordenObra, r.ubicacion, r.responsableNombre, r.actividades].some((v) => v.toLowerCase().includes(term)),
+    [r.ordenObra, r.ubicacion, r.responsableNombre, r.actividades, actaNumber(r.actaNumero)].some((v) =>
+      v.toLowerCase().includes(term),
+    ),
   )
 
   return (
@@ -92,9 +70,13 @@ export default function ReportsPage() {
         </Button>
       </Stack>
 
+      <LocalImportBanner />
+
+      {error && <Alert severity="error">No se pudieron cargar los informes: {error.message}</Alert>}
+
       {rows && rows.length > 0 && (
         <TextField
-          placeholder="Buscar por orden de obra, ubicación, responsable o actividad"
+          placeholder="Buscar por orden de obra, N° de acta, ubicación, responsable o actividad"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           slotProps={{ input: { startAdornment: <InputAdornment position="start"><SearchIcon /></InputAdornment> } }}
@@ -102,7 +84,7 @@ export default function ReportsPage() {
         />
       )}
 
-      {!rows && (
+      {!rows && !error && (
         <Box sx={{ display: 'grid', placeItems: 'center', py: 8 }}>
           <CircularProgress />
         </Box>
@@ -131,7 +113,7 @@ export default function ReportsPage() {
           <Card key={r.id} variant="outlined" sx={{ position: 'relative' }}>
             <CardActionArea onClick={() => navigate(`/informes/${r.id}`)} sx={{ p: 2, pr: 6, height: '100%', alignItems: 'flex-start' }}>
               <Typography variant="overline" color="text.secondary">
-                Orden de obra
+                Orden de obra · Acta N° {actaNumber(r.actaNumero)}
               </Typography>
               <Typography variant="h6" sx={{ fontWeight: 700, lineHeight: 1.2, mb: 1 }} noWrap>
                 {r.ordenObra}
@@ -160,8 +142,8 @@ export default function ReportsPage() {
               ) : (
                 <ReportActionsMenu
                   onEdit={() => navigate(`/informes/${r.id}`)}
-                  onPreview={() => pdf.openPreview(r.id!)}
-                  onDownload={() => pdf.download(r.id!)}
+                  onPreview={() => pdf.openPreview(r.id)}
+                  onDownload={(kind) => pdf.download(r.id, kind)}
                   onDelete={() => setToDelete(r)}
                 />
               )}
@@ -175,10 +157,7 @@ export default function ReportsPage() {
         open={!!toDelete}
         title="Eliminar informe"
         message={`¿Eliminar el informe de la orden ${toDelete?.ordenObra} con todos sus servicios y evidencias?`}
-        onConfirm={async () => {
-          await deleteReport(toDelete!.id!)
-          notify('Informe eliminado')
-        }}
+        onConfirm={() => run(() => deleteReport(toDelete!.id), 'Informe eliminado')}
         onClose={() => setToDelete(null)}
       />
     </Stack>

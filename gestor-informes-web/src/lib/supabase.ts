@@ -8,6 +8,7 @@ if (!url || !key) {
 }
 
 /** Cliente único de Supabase. La clave publicable es pública por diseño: la seguridad la dan RLS y el login. */
-export const supabase = createClient(url, key)
+// PKCE: los enlaces de los correos vuelven con ?code=..., compatible con la navegación por # de la app.
+export const supabase = createClient(url, key, { auth: { flowType: 'pkce' } })
 
 export const EVIDENCE_BUCKET = 'evidencias'

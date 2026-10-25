@@ -4,12 +4,12 @@ import ArrowUpwardIcon from '@mui/icons-material/ArrowUpward'
 import DeleteOutlineIcon from '@mui/icons-material/DeleteOutlined'
 import EditOutlinedIcon from '@mui/icons-material/EditOutlined'
 import { Box, Button, Chip, IconButton, LinearProgress, Paper, Stack, Tooltip, Typography } from '@mui/material'
-import { useLiveQuery } from 'dexie-react-hooks'
+import { useQueryClient } from '@tanstack/react-query'
 import { useRef, useState } from 'react'
-import { addEvidences, db, deleteService, moveService, renameService } from '../db'
+import { addEvidence, deleteService, moveService, renameService } from '../api'
+import { useAction, useEvidences } from '../hooks/queries'
 import { useNotify } from '../hooks/useNotify'
-import { processImage, type ProcessedImage } from '../lib/images'
-import { sortEvidences } from '../lib/sort'
+import { processImage } from '../lib/images'
 import type { Service } from '../types'
 import { ConfirmDialog, TextPromptDialog } from './Dialogs'
 import { EvidenceTile } from './EvidenceTile'
@@ -22,11 +22,9 @@ interface ServiceCardProps {
 
 export function ServiceCard({ service, isFirst, isLast }: ServiceCardProps) {
   const notify = useNotify()
-  const id = service.id!
-  const evidences = useLiveQuery(
-    async () => sortEvidences(await db.evidences.where('serviceId').equals(id).toArray()),
-    [id],
-  )
+  const run = useAction()
+  const queryClient = useQueryClient()
+  const { data: evidences } = useEvidences(service.id)
   const input = useRef<HTMLInputElement>(null)
   const [dialog, setDialog] = useState<'rename' | 'delete' | null>(null)
   const [progress, setProgress] = useState<{ done: number; total: number } | null>(null)
@@ -35,22 +33,23 @@ export function ServiceCard({ service, isFirst, isLast }: ServiceCardProps) {
   const upload = async (files: File[]) => {
     if (files.length === 0) return
     setProgress({ done: 0, total: files.length })
-    const ok: ProcessedImage[] = []
+    let ok = 0
     const failed: string[] = []
     for (const file of files) {
       try {
-        ok.push(await processImage(file))
+        await addEvidence(service, await processImage(file))
+        ok++
       } catch (e) {
         failed.push(e instanceof Error ? e.message : String(e))
       }
       setProgress((p) => p && { ...p, done: p.done + 1 })
     }
-    if (ok.length) await addEvidences(id, ok)
     setProgress(null)
+    await queryClient.invalidateQueries()
     if (failed.length) {
-      notify(`Se cargaron ${ok.length} de ${files.length} imágenes.\n${failed.join('\n')}`, 'error')
+      notify(`Se cargaron ${ok} de ${files.length} imágenes.\n${failed.join('\n')}`, 'error')
     } else {
-      notify(`${ok.length} evidencia(s) cargada(s) en "${service.nombre}"`)
+      notify(`${ok} evidencia(s) cargada(s) en "${service.nombre}"`)
     }
   }
 
@@ -73,14 +72,14 @@ export function ServiceCard({ service, isFirst, isLast }: ServiceCardProps) {
         />
         <Tooltip title="Subir">
           <span>
-            <IconButton size="small" disabled={isFirst} onClick={() => moveService(id, -1)} aria-label="Mover arriba">
+            <IconButton size="small" disabled={isFirst} onClick={() => run(() => moveService(service, -1))} aria-label="Mover arriba">
               <ArrowUpwardIcon fontSize="small" />
             </IconButton>
           </span>
         </Tooltip>
         <Tooltip title="Bajar">
           <span>
-            <IconButton size="small" disabled={isLast} onClick={() => moveService(id, 1)} aria-label="Mover abajo">
+            <IconButton size="small" disabled={isLast} onClick={() => run(() => moveService(service, 1))} aria-label="Mover abajo">
               <ArrowDownwardIcon fontSize="small" />
             </IconButton>
           </span>
@@ -112,7 +111,7 @@ export function ServiceCard({ service, isFirst, isLast }: ServiceCardProps) {
         }}
       >
         <Box sx={{ display: 'grid', gap: 1.5, gridTemplateColumns: 'repeat(auto-fill, minmax(130px, 1fr))' }}>
-          {evidences?.map((ev, i) => <EvidenceTile key={ev.id} evidence={ev} index={i + 1} />)}
+          {evidences?.map((ev, i) => <EvidenceTile key={ev.id} evidence={ev} reportId={service.reportId} index={i + 1} />)}
           <Button
             variant="outlined"
             onClick={() => input.current?.click()}
@@ -120,7 +119,7 @@ export function ServiceCard({ service, isFirst, isLast }: ServiceCardProps) {
             sx={{ minHeight: 160, flexDirection: 'column', gap: 1, borderStyle: 'dashed' }}
           >
             <AddPhotoAlternateOutlinedIcon fontSize="large" />
-            {progress ? `Procesando ${progress.done}/${progress.total}…` : 'Subir evidencias'}
+            {progress ? `Subiendo ${progress.done}/${progress.total}…` : 'Subir evidencias'}
             <Typography variant="caption" color="text.secondary">
               o arrástrelas aquí
             </Typography>
@@ -144,20 +143,14 @@ export function ServiceCard({ service, isFirst, isLast }: ServiceCardProps) {
         title="Renombrar servicio"
         label="Nombre del servicio"
         initialValue={service.nombre}
-        onSubmit={async (nombre) => {
-          await renameService(id, nombre)
-          notify('Servicio actualizado')
-        }}
+        onSubmit={(nombre) => run(() => renameService(service, nombre), 'Servicio actualizado')}
         onClose={() => setDialog(null)}
       />
       <ConfirmDialog
         open={dialog === 'delete'}
         title="Eliminar servicio"
         message={`¿Eliminar "${service.nombre}" y sus ${evidences?.length ?? 0} evidencia(s)? Esta acción no se puede deshacer.`}
-        onConfirm={async () => {
-          await deleteService(id)
-          notify('Servicio eliminado')
-        }}
+        onConfirm={() => run(() => deleteService(service), 'Servicio eliminado')}
         onClose={() => setDialog(null)}
       />
     </Paper>

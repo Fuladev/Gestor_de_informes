@@ -62,7 +62,7 @@ export async function reviewReport({ report, services }: FullReport): Promise<Is
       if (!ev.nombre.trim()) {
         issues.push({ level: 'warning', message: `"${label}": hay una evidencia sin nombre`, evidenceId: ev.id })
       }
-      if (!(await isDecodable(ev.blob))) {
+      if (!ev.blob || !(await isDecodable(ev.blob))) {
         issues.push({ level: 'error', message: `"${label}": la evidencia "${ev.nombre}" está dañada, vuelva a subirla`, evidenceId: ev.id })
       } else if (Math.min(ev.width, ev.height) < MIN_SIDE) {
         issues.push({

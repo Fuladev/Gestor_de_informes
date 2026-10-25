@@ -1,11 +1,12 @@
 # Gestor de informes · Fula Constructor S.A.S.
 
-Aplicación web para crear los **informes de visita técnica** de Fula Constructor S.A.S.: se registran los datos de la
-obra, se cargan las fotos de evidencia de cada servicio realizado, se revisa que todo esté bien y se descarga el
-informe en **PDF** con la misma plantilla que usa la aplicación de escritorio (Java).
+Aplicación web para crear los **informes de visita técnica** y las **actas de entrega** de Fula Constructor S.A.S.:
+se registran los datos de la obra, se cargan las fotos de evidencia de cada servicio realizado, se revisa que todo
+esté bien y se descargan en **PDF** el informe (misma plantilla que la aplicación de escritorio en Java) y el acta
+de entrega con su **consecutivo automático**.
 
-Funciona completamente en el navegador: no necesita servidor, base de datos externa ni conexión a internet una vez
-cargada.
+Los datos se guardan en la nube (**Supabase**): un informe creado en el celular aparece al instante en el
+computador y en cualquier otro dispositivo que ingrese con una cuenta autorizada.
 
 **Aplicación publicada:** <https://fuladev.github.io/Gestor_de_informes/>  (GitHub Pages, rama `gh-pages`)
 
@@ -18,14 +19,16 @@ cargada.
 1. [Funcionalidades](#funcionalidades)
 2. [Guía de uso](#guía-de-uso)
 3. [El PDF generado](#el-pdf-generado)
-4. [Revisión antes de descargar](#revisión-antes-de-descargar)
-5. [Instalación y ejecución](#instalación-y-ejecución)
-6. [Publicar la aplicación](#publicar-la-aplicación)
+4. [Acta de entrega](#acta-de-entrega)
+5. [Revisión antes de descargar](#revisión-antes-de-descargar)
+6. [Acceso y usuarios](#acceso-y-usuarios)
 7. [¿Dónde se guardan los datos?](#dónde-se-guardan-los-datos)
-8. [Personalización](#personalización)
-9. [Arquitectura del código](#arquitectura-del-código)
-10. [Tecnologías](#tecnologías)
-11. [Preguntas frecuentes](#preguntas-frecuentes)
+8. [Instalación y ejecución](#instalación-y-ejecución)
+9. [Publicar la aplicación](#publicar-la-aplicación)
+10. [Personalización](#personalización)
+11. [Arquitectura del código](#arquitectura-del-código)
+12. [Tecnologías](#tecnologías)
+13. [Preguntas frecuentes](#preguntas-frecuentes)
 
 ---
 
@@ -36,8 +39,11 @@ cargada.
 | **Informes** | Crear, listar, buscar, editar y eliminar informes. |
 | **Servicios** | Agregar los servicios prestados en la obra, renombrarlos, reordenarlos y eliminarlos. |
 | **Evidencias** | Subir varias fotos a la vez (botón o arrastrar y soltar), verlas en grande, renombrarlas, reemplazarlas y eliminarlas. |
-| **Previsualización** | Ver el PDF exactamente como se va a descargar y una revisión automática de errores. |
-| **Descarga** | Descargar el PDF desde el menú **⋮** de cada informe o desde el editor. |
+| **Previsualización** | Ver el informe y el acta exactamente como se van a descargar, y una revisión automática de errores. |
+| **Descarga** | Descargar el **informe PDF** o el **acta de entrega** desde el menú **⋮** de cada informe o desde el editor. |
+| **Acta de entrega** | Cada informe recibe automáticamente un número de acta consecutivo (0001, 0002, …). |
+| **Nube** | Los informes y fotos se guardan en Supabase y se sincronizan en vivo entre dispositivos. |
+| **Acceso** | Solo ingresan las personas con correo autorizado por la empresa. |
 
 Datos que se registran por cada informe:
 
@@ -173,6 +179,41 @@ El PDF es tamaño **A4** y replica la plantilla de la aplicación de escritorio 
 
 ---
 
+## Acta de entrega
+
+Cada informe tiene su **acta de entrega** en PDF (tamaño carta), con la misma plantilla de
+`ACTA_DE_ENTREGA.pdf`. No hay que llenar nada adicional: todo sale del formulario del informe.
+
+### Consecutivo automático
+
+- Al **crear** un informe, la base de datos le asigna el siguiente número de acta: el primero es `0001`, luego
+  `0002`, `0003`, …
+- El número lo genera **Supabase**, no el navegador, así que dos personas creando informes al mismo tiempo en
+  dispositivos distintos nunca reciben el mismo número.
+- El número **no se puede editar** ni se reutiliza: si se elimina un informe, su número queda libre pero no se
+  vuelve a asignar (igual que un talonario).
+- Se ve en el listado (`Acta N° 0002`), en el encabezado del editor y en la pestaña del acta de la
+  previsualización. También se puede buscar por número.
+
+### De dónde sale cada dato
+
+| En el acta | Dato del informe |
+| --- | --- |
+| `Villavicencio meta 20/06/2026` | Fecha de finalización |
+| `Inmueble: …` y “trabajo realizado en la …” | Ubicación de la obra |
+| `ACTA N° 0193` | Consecutivo automático |
+| Lista `a.`, `b.`, `c.` bajo “Mantenimiento:” | Nombres de los servicios, en su orden (si no hay servicios, las actividades) |
+| “El trabajo fue recibido por el señor(a) …” y firma de quien recibe | Nombre del responsable |
+| Cargo bajo la firma de quien recibe (p. ej. “Pastor encargado”) | Cargo del responsable |
+| Representante legal, NIT, cédula, firma, dirección, teléfono y correo | Datos fijos en `src/config.ts` → `ACTA` |
+
+<img src="docs/capturas/08-acta-1.png" alt="Acta de entrega generada" width="480">
+
+El acta se descarga con el nombre `acta_entrega_<consecutivo>_<orden de obra>.pdf`, por ejemplo
+`acta_entrega_0002_084-183.pdf`.
+
+---
+
 ## Revisión antes de descargar
 
 La revisión automática detecta lo siguiente:
@@ -187,13 +228,46 @@ La revisión automática detecta lo siguiente:
 | Una evidencia no tiene nombre | 🟠 Advertencia |
 | Hay nombres de evidencia repetidos dentro de un mismo servicio | 🟠 Advertencia |
 
-Los **errores** impiden la descarga directa (se abre la revisión). Las **advertencias** solo informan.
+Los **errores** impiden la descarga directa del informe (se abre la revisión). Las **advertencias** solo informan.
+El acta de entrega no lleva fotos, así que solo exige que los datos obligatorios del formulario estén completos.
+
+---
+
+## Acceso y usuarios
+
+La aplicación está publicada en internet, por eso **pide iniciar sesión** con correo y contraseña.
+
+- Solo pueden **crear cuenta** los correos que estén en la lista de **miembros autorizados**. Si alguien intenta
+  registrarse con otro correo, la base de datos lo rechaza.
+- Todos los miembros ven y editan **los mismos informes** (es el espacio de trabajo de la empresa).
+- La protección está en la base de datos (políticas *Row Level Security* de Supabase y un bucket privado para las
+  fotos), no solo en la pantalla: sin una sesión de un miembro no se puede leer ni modificar nada.
+
+<img src="docs/capturas/00-ingreso.png" alt="Pantalla de ingreso" width="560">
+
+**Primera vez:** en la pantalla de ingreso elija *“Primera vez: crear mi cuenta”*, escriba su correo autorizado y
+una contraseña, y confirme el correo que le llega. Después ingrese normalmente. Si olvida la contraseña, use
+*“Olvidé mi contraseña”*.
+
+**Agregar o quitar personas** (desde el panel de Supabase → *SQL Editor*):
+
+```sql
+-- autorizar a una persona (el correo en minúsculas)
+insert into public.miembros (email) values ('persona@empresa.com');
+
+-- quitarle el acceso
+delete from public.miembros where email = 'persona@empresa.com';
+```
+
+Quien sale de la lista deja de ver los informes inmediatamente, aunque su cuenta siga existiendo.
 
 ---
 
 ## Instalación y ejecución
 
-Requisitos: **Node.js 20** o superior y npm.
+Requisitos: **Node.js 20** o superior y npm. La conexión a Supabase se configura en el archivo `.env`
+(`VITE_SUPABASE_URL` y `VITE_SUPABASE_PUBLISHABLE_KEY`). La clave publicable es pública por diseño: va incluida en
+la aplicación y el acceso a los datos lo controlan el login y las políticas de seguridad.
 
 ```bash
 git clone <url-de-este-repositorio>
@@ -235,19 +309,28 @@ navegación con `#`, así que se puede publicar en cualquier hosting estático s
 
 ## ¿Dónde se guardan los datos?
 
-Los informes, servicios y fotos se guardan **en el navegador** del equipo (IndexedDB). Esto significa que:
+Todo se guarda en el proyecto de Supabase **`gestor-informes`**:
 
-- ✅ No necesita servidor ni internet para trabajar, y los datos no salen del equipo.
-- ⚠️ Cada navegador y cada equipo tiene **sus propios informes**: lo que se crea en el celular no aparece en el
-  computador.
-- ⚠️ Si se **borran los datos de navegación** del sitio, o se usa una ventana de incógnito, los informes se
-  pierden. Descargue el PDF de cada informe terminado para conservarlo.
+| Qué | Dónde |
+| --- | --- |
+| Informes, servicios y datos de cada evidencia | Base de datos Postgres (tablas `informes`, `servicios`, `evidencias`) |
+| Fotos de evidencia | Supabase Storage, bucket privado `evidencias` |
+| Usuarios | Supabase Auth; lista de autorizados en la tabla `miembros` |
+| Consecutivo de actas | Secuencia `acta_consecutivo_seq` |
 
-Las fotos se reducen automáticamente a un máximo de **1600 px** por lado y se guardan en JPEG, para que el
-navegador no se llene y el PDF quede liviano.
+- ✅ Los informes se ven desde **cualquier dispositivo** con una cuenta autorizada, y los cambios aparecen en vivo
+  en los demás dispositivos abiertos.
+- ✅ Borrar los datos del navegador o cambiar de celular **no** borra los informes.
+- ⚠️ Se necesita conexión a internet para trabajar.
+- Las fotos se reducen automáticamente a un máximo de **1600 px** por lado y se guardan en JPEG, para que suban
+  rápido desde el celular y el PDF quede liviano.
 
-Si en el futuro se necesita compartir informes entre varias personas, se puede reemplazar `src/db.ts` por llamadas
-a un backend sin cambiar el resto de la aplicación.
+**Informes de la versión anterior.** La primera versión de la app guardaba los informes solo en el navegador. Si
+un dispositivo todavía tiene informes así, al ingresar aparece el aviso *“Hay N informe(s) guardado(s) solo en
+este dispositivo”* con el botón **Subir a la nube**: los sube con sus fotos (asignándoles número de acta) y los
+borra del navegador.
+
+El esquema de la base de datos está en [`supabase/migrations/`](supabase/migrations).
 
 ---
 
@@ -257,6 +340,8 @@ a un backend sin cambiar el resto de la aplicación.
 | --- | --- |
 | Nombre de la empresa, del gerente, su cargo, título del informe y versión | `src/config.ts` → `COMPANY` |
 | Lista de “Documentación entregada” | `src/config.ts` → `DOCUMENTACION_ENTREGADA` |
+| Datos fijos del acta (representante legal, NIT, cédula, dirección, teléfono, correo) | `src/config.ts` → `ACTA` |
+| Texto y posiciones del acta de entrega | `src/lib/acta.ts` |
 | Logo del encabezado | `src/assets/logo.png` |
 | Firma del gerente | `src/assets/firma.png` |
 | Textos de la validación de visita | `src/lib/pdf.ts` → método `closing()` |
@@ -271,13 +356,14 @@ Después de cualquier cambio ejecute `npm run build` para generar una nueva vers
 
 ```
 src/
-├── main.tsx                 Punto de entrada: tema, notificaciones y enrutador
-├── App.tsx                  Barra superior y rutas
+├── main.tsx                 Punto de entrada: tema, caché de datos, notificaciones y enrutador
+├── App.tsx                  Sesión, barra superior y rutas
 ├── theme.ts                 Tema de Material UI (colores de la marca)
 ├── config.ts                Datos fijos de la plantilla del PDF
 ├── types.ts                 Modelos de datos: Report, Service, Evidence
-├── db.ts                    Base de datos IndexedDB (Dexie) y todas las operaciones CRUD
+├── api.ts                   Todas las operaciones CRUD contra Supabase (tablas y Storage)
 ├── pages/
+│   ├── LoginPage.tsx        Ingreso, creación de cuenta y recuperación de contraseña
 │   ├── ReportsPage.tsx      Listado, búsqueda y menú de acciones de los informes
 │   └── ReportEditorPage.tsx Crear/editar un informe y sus servicios
 ├── components/
@@ -286,38 +372,48 @@ src/
 │   ├── ServiceCard.tsx      Un servicio: subida de fotos, reordenar, renombrar, eliminar
 │   ├── EvidenceTile.tsx     Una evidencia: ver, renombrar, reemplazar, eliminar
 │   ├── EvidenceThumb.tsx    Miniatura con número de posición
-│   ├── PreviewDialog.tsx    Ventana de previsualización (PDF + revisión)
-│   ├── ReportActionsMenu.tsx Menú ⋮ (editar, previsualizar, descargar, eliminar)
+│   ├── PreviewDialog.tsx    Previsualización (informe, acta y revisión)
+│   ├── ReportActionsMenu.tsx Menú ⋮ (editar, previsualizar, descargar informe/acta, eliminar)
+│   ├── LocalImportBanner.tsx Aviso para subir informes de la versión anterior
 │   ├── Dialogs.tsx          Diálogos de confirmación y de texto
 │   └── NotifyProvider.tsx   Mensajes emergentes
 ├── hooks/
+│   ├── queries.ts           Consultas con caché (React Query) y ejecución de cambios
+│   ├── useRealtimeSync.ts   Refresca la pantalla cuando otro dispositivo cambia datos
+│   ├── useSession.ts        Sesión de Supabase Auth
 │   ├── useReportPdf.tsx     Lógica compartida de previsualizar y descargar
 │   ├── useObjectUrl.ts      URLs temporales para mostrar imágenes y PDF
 │   └── useNotify.ts         Acceso a los mensajes emergentes
 ├── lib/
-│   ├── pdf.ts               Generación del PDF con jsPDF (réplica de la plantilla)
+│   ├── supabase.ts          Cliente de Supabase
+│   ├── pdf.ts               PDF del informe con jsPDF (réplica de la plantilla iText)
+│   ├── acta.ts              PDF del acta de entrega (réplica de ACTA_DE_ENTREGA.pdf)
+│   ├── pdfAssets.ts         Utilidades compartidas por los dos PDF
+│   ├── localLegacy.ts       Lectura de los informes de la versión anterior (solo navegador)
 │   ├── images.ts            Validación, reducción y conversión de fotos a JPEG
 │   ├── validation.ts        Validación del formulario y revisión previa a la descarga
 │   ├── sort.ts              Orden natural de evidencias (img1, img1 2, img2, img10)
-│   ├── format.ts            Formato de fechas y nombre del archivo PDF
+│   ├── format.ts            Formato de fechas, consecutivo y nombres de archivo
 │   └── emptyReport.ts       Valores iniciales del formulario
-└── assets/                  Logo y firma usados en el PDF
+└── assets/                  Logo y firma usados en los PDF
+supabase/migrations/         Esquema de la base de datos, seguridad y bucket de fotos
 ```
 
 ### Modelo de datos
 
 ```
-Report (informe)
+Report (informe)                        tabla informes
+ ├─ actaNumero (consecutivo, lo asigna la base de datos)
  ├─ ordenObra, ubicacion, actividades, justificacion
  ├─ responsableNombre, responsableTelefono, responsableCargo
  ├─ fechaInicio, fechaFin, tipoValidacion
  └─ Service[] (servicios, ordenados por `posicion`)
       ├─ nombre, posicion
       └─ Evidence[] (fotos, ordenadas por `nombre` en orden natural)
-           └─ nombre, blob (JPEG), width, height, originalName
+           └─ nombre, storagePath (JPEG en Storage), width, height, originalName
 ```
 
-Al eliminar un informe se eliminan sus servicios y evidencias; al eliminar un servicio se eliminan sus
+Al eliminar un informe se eliminan sus servicios, evidencias y fotos; al eliminar un servicio se eliminan sus
 evidencias y se renumeran los demás.
 
 ### Flujo de generación del PDF
@@ -338,7 +434,8 @@ evidencias y se renumeran los demás.
 | [Vite](https://vite.dev) | Servidor de desarrollo y compilación |
 | [Material UI](https://mui.com) | Componentes visuales (formularios, menús, diálogos) |
 | [React Router](https://reactrouter.com) | Navegación entre pantallas |
-| [Dexie](https://dexie.org) | Base de datos IndexedDB en el navegador |
+| [Supabase](https://supabase.com) | Base de datos Postgres, autenticación, almacenamiento de fotos y tiempo real |
+| [TanStack Query](https://tanstack.com/query) | Caché y actualización de los datos en pantalla |
 | [jsPDF](https://github.com/parallax/jsPDF) | Generación del PDF |
 
 ---
@@ -364,6 +461,15 @@ Con las flechas ↑ ↓ de la barra de cada servicio.
 **¿Qué fecha aparece arriba a la derecha del PDF?**
 La fecha del día en que se genera el PDF, igual que en la versión de escritorio.
 
-**Borré los datos del navegador y desaparecieron los informes.**
-Los datos solo viven en ese navegador (ver [¿Dónde se guardan los datos?](#dónde-se-guardan-los-datos)).
-Conserve siempre el PDF descargado de cada informe terminado.
+**¿Puedo cambiar el número de un acta?**
+No. El consecutivo lo asigna la base de datos al crear el informe para garantizar que nunca se repita. Si
+necesita que la numeración arranque en otro número (por ejemplo para continuar la del talonario en papel), en el
+*SQL Editor* de Supabase ejecute `alter sequence public.acta_consecutivo_seq restart with 194;` antes de crear el
+siguiente informe.
+
+**Me dice que mi correo no está autorizado.**
+Pida al administrador que lo agregue a la lista de miembros (ver [Acceso y usuarios](#acceso-y-usuarios)).
+
+**No me llegó el correo de confirmación.**
+Revise la carpeta de spam. El servicio de correo incluido en Supabase tiene un límite de pocos correos por hora;
+si se alcanza, espere un rato y vuelva a intentarlo.

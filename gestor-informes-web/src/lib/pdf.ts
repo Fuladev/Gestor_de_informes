@@ -4,6 +4,7 @@ import firmaUrl from '../assets/firma.png'
 import { COMPANY, DOCUMENTACION_ENTREGADA } from '../config'
 import type { Evidence, FullReport, Report, ServiceWithEvidences } from '../types'
 import { formatDate, pdfFileName, todayFormatted } from './format'
+import { fit, loadUrl, type LoadedImage } from './pdfAssets'
 
 // Medidas en puntos: A4 con márgenes de 36pt, igual que el Document por defecto de iText.
 const PAGE_W = 595.28
@@ -32,25 +33,6 @@ interface TextStyle {
 interface CellStyle extends TextStyle {
   fill?: boolean
   border?: boolean
-}
-
-interface LoadedImage {
-  data: Uint8Array
-  width: number
-  height: number
-}
-
-async function loadUrl(url: string): Promise<LoadedImage> {
-  const blob = await (await fetch(url)).blob()
-  const bitmap = await createImageBitmap(blob)
-  const image = { data: new Uint8Array(await blob.arrayBuffer()), width: bitmap.width, height: bitmap.height }
-  bitmap.close()
-  return image
-}
-
-function fit(width: number, height: number, maxW: number, maxH: number) {
-  const scale = Math.min(maxW / width, maxH / height)
-  return { w: width * scale, h: height * scale }
 }
 
 class ReportPdfBuilder {
@@ -284,7 +266,7 @@ export async function buildReportPdf({ report, services }: FullReport): Promise<
   await Promise.all(
     services.flatMap((s) =>
       s.evidences.map(async (ev) => {
-        if (ev.id !== undefined) evidenceData.set(ev.id, new Uint8Array(await ev.blob.arrayBuffer()))
+        if (ev.blob) evidenceData.set(ev.id, new Uint8Array(await ev.blob.arrayBuffer()))
       }),
     ),
   )
