@@ -1,7 +1,6 @@
 export type TipoValidacion = 'visita' | 'recibido'
 
-export interface Report {
-  id?: number
+export interface ReportData {
   ordenObra: string
   actividades: string
   justificacion: string
@@ -13,14 +12,18 @@ export interface Report {
   fechaInicio: string
   fechaFin: string
   tipoValidacion: TipoValidacion
+}
+
+export interface Report extends ReportData {
+  id: number
+  /** Consecutivo del acta de entrega; lo asigna la base de datos al crear el informe. */
+  actaNumero: number
   createdAt: number
   updatedAt: number
 }
 
-export type ReportData = Omit<Report, 'id' | 'createdAt' | 'updatedAt'>
-
 export interface Service {
-  id?: number
+  id: number
   reportId: number
   nombre: string
   /** Posición del servicio dentro del informe (1. , 2. , ...). */
@@ -29,20 +32,26 @@ export interface Service {
 }
 
 export interface Evidence {
-  id?: number
+  id: number
   serviceId: number
   /** Nombre con el que se ordena la evidencia (por defecto el nombre del archivo sin extensión). */
   nombre: string
-  /** Imagen normalizada a JPEG para que siempre pueda incrustarse en el PDF. */
-  blob: Blob
+  /** Ruta de la imagen (JPEG) en el bucket "evidencias" de Supabase Storage. */
+  storagePath: string
   width: number
   height: number
   originalName: string
   createdAt: number
 }
 
+/** Evidencia con la imagen descargada, necesaria para generar el PDF y revisarla. */
+export interface EvidenceWithBlob extends Evidence {
+  /** `null` si la imagen no se pudo descargar del almacenamiento. */
+  blob: Blob | null
+}
+
 export interface ServiceWithEvidences extends Service {
-  evidences: Evidence[]
+  evidences: EvidenceWithBlob[]
 }
 
 export interface FullReport {
